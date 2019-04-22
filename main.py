@@ -60,7 +60,55 @@ def layers(vgg_layer3_out, vgg_layer4_out, vgg_layer7_out, num_classes):
     :return: The Tensor for the last layer of output
     """
     # TODO: Implement function
-    return None
+    #Skip layers 
+
+    # O1 - 1 
+    layer7_1x1 = tf.layers.conv2d(vgg_layer7_out,
+                                       num_classes, 1, strides=1,
+                                       padding= "same",
+                                       kernel_initializer= tf.random_normal_initializer(stddev=0.01),
+                                       kernel_regularizer= tf.contrib.layers.l2_regularizer(1e-3))
+    upsampling_1 = tf.layers.conv2d_transpose(layer7_1x1,
+                                              num_classes,
+                                              4, 
+                                              strides= (2, 2),
+                                              padding="same",
+                                              kernel_initializer= tf.random_normal_initializer(stddev=0.01),
+                                              kernel_regularizer= tf.contrib.layers.l2_regularizer(1e-3))
+    
+    layer4_1x1 = tf.layers.conv2d(vgg_layer4_out,
+                                       num_classes, 1, strides=1,
+                                       padding= "same",
+                                       kernel_initializer= tf.random_normal_initializer(stddev=0.01),
+                                       kernel_regularizer= tf.contrib.layers.l2_regularizer(1e-3))
+    
+    skip_layer_1 = tf.add(upsampling_1, layer4_1x1)
+
+
+    upsampling_2 = tf.layers.conv2d_transpose(skip_layer_1,
+                                              num_classes,
+                                              4, 
+                                              strides= (2,2),
+                                              padding="same",
+                                              kernel_initializer= tf.random_normal_initializer(stddev=0.01),
+                                              kernel_regularizer= tf.contrib.layers.l2_regularizer(1e-3))
+
+    layer3_1x1 = tf.layers.conv2d(vgg_layer3_out,
+                                    num_classes, 1, strides=1,
+                                    padding= "same",
+                                    kernel_initializer= tf.random_normal_initializer(stddev=0.01),
+                                    kernel_regularizer= tf.contrib.layers.l2_regularizer(1e-3))
+
+    skip_layer_2 = tf.add(upsampling_2, layer3_1x1)
+
+    output = tf.layers.conv2d_transpose(skip_layer_2,
+                                              num_classes,
+                                              16, 
+                                              strides= (8, 8),
+                                              padding="same",
+                                              kernel_initializer= tf.random_normal_initializer(stddev=0.01),
+                                              kernel_regularizer= tf.contrib.layers.l2_regularizer(1e-3))
+    return output
 tests.test_layers(layers)
 
 
