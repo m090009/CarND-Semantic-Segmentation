@@ -5,8 +5,14 @@ import helper
 import warnings
 from distutils.version import LooseVersion
 import project_tests as tests
+import time
 
 
+
+STDDEV = 0.01
+L2_REG = 1e-3
+LR = 1e-4
+KEEP_PROB = 0.85
 # Check TensorFlow Version
 assert LooseVersion(tf.__version__) >= LooseVersion('1.0'), 'Please use TensorFlow version 1.0 or newer.  You are using {}'.format(tf.__version__)
 print('TensorFlow Version: {}'.format(tf.__version__))
@@ -46,7 +52,7 @@ def load_vgg(sess, vgg_path):
     vgg_layer7_out_tensor = default_graph.get_tensor_by_name(vgg_layer7_out_tensor_name)
 
     return vgg_input_tensor, vgg_keep_prob_tensor, vgg_layer3_out_tensor, vgg_layer4_out_tensor, vgg_layer7_out_tensor
-
+print("Load_vgg test:")
 tests.test_load_vgg(load_vgg, tf)
 
 
@@ -66,21 +72,21 @@ def layers(vgg_layer3_out, vgg_layer4_out, vgg_layer7_out, num_classes):
     layer7_1x1 = tf.layers.conv2d(vgg_layer7_out,
                                        num_classes, 1, strides=1,
                                        padding= "same",
-                                       kernel_initializer= tf.random_normal_initializer(stddev=0.01),
-                                       kernel_regularizer= tf.contrib.layers.l2_regularizer(1e-3))
+                                       kernel_initializer= tf.random_normal_initializer(stddev=STDDEV),
+                                       kernel_regularizer= tf.contrib.layers.l2_regularizer(L2_REG))
     upsampling_1 = tf.layers.conv2d_transpose(layer7_1x1,
                                               num_classes,
                                               4, 
                                               strides= (2, 2),
                                               padding="same",
-                                              kernel_initializer= tf.random_normal_initializer(stddev=0.01),
-                                              kernel_regularizer= tf.contrib.layers.l2_regularizer(1e-3))
+                                              kernel_initializer= tf.random_normal_initializer(stddev=STDDEV),
+                                              kernel_regularizer= tf.contrib.layers.l2_regularizer(L2_REG))
     
     layer4_1x1 = tf.layers.conv2d(vgg_layer4_out,
                                        num_classes, 1, strides=1,
                                        padding= "same",
-                                       kernel_initializer= tf.random_normal_initializer(stddev=0.01),
-                                       kernel_regularizer= tf.contrib.layers.l2_regularizer(1e-3))
+                                       kernel_initializer= tf.random_normal_initializer(stddev=STDDEV),
+                                       kernel_regularizer= tf.contrib.layers.l2_regularizer(L2_REG))
     
     skip_layer_1 = tf.add(upsampling_1, layer4_1x1)
 
@@ -90,14 +96,14 @@ def layers(vgg_layer3_out, vgg_layer4_out, vgg_layer7_out, num_classes):
                                               4, 
                                               strides= (2,2),
                                               padding="same",
-                                              kernel_initializer= tf.random_normal_initializer(stddev=0.01),
-                                              kernel_regularizer= tf.contrib.layers.l2_regularizer(1e-3))
+                                              kernel_initializer= tf.random_normal_initializer(stddev=STDDEV),
+                                              kernel_regularizer= tf.contrib.layers.l2_regularizer(L2_REG))
 
     layer3_1x1 = tf.layers.conv2d(vgg_layer3_out,
                                     num_classes, 1, strides=1,
                                     padding= "same",
-                                    kernel_initializer= tf.random_normal_initializer(stddev=0.01),
-                                    kernel_regularizer= tf.contrib.layers.l2_regularizer(1e-3))
+                                    kernel_initializer= tf.random_normal_initializer(stddev=STDDEV),
+                                    kernel_regularizer= tf.contrib.layers.l2_regularizer(L2_REG))
 
     skip_layer_2 = tf.add(upsampling_2, layer3_1x1)
 
@@ -106,9 +112,10 @@ def layers(vgg_layer3_out, vgg_layer4_out, vgg_layer7_out, num_classes):
                                               16, 
                                               strides= (8, 8),
                                               padding="same",
-                                              kernel_initializer= tf.random_normal_initializer(stddev=0.01),
-                                              kernel_regularizer= tf.contrib.layers.l2_regularizer(1e-3))
+                                              kernel_initializer= tf.random_normal_initializer(stddev=STDDEV),
+                                              kernel_regularizer= tf.contrib.layers.l2_regularizer(L2_REG))
     return output
+print("Layers test:")
 tests.test_layers(layers)
 
 
@@ -132,6 +139,7 @@ def optimize(nn_last_layer, correct_label, learning_rate, num_classes):
     train_op = optimizer.minimize(cross_entropy_loss)
 
     return logits, train_op, cross_entropy_loss
+print("Optimize test:")
 tests.test_optimize(optimize)
 
 
@@ -151,7 +159,19 @@ def train_nn(sess, epochs, batch_size, get_batches_fn, train_op, cross_entropy_l
     :param learning_rate: TF Placeholder for learning rate
     """
     # TODO: Implement function
-    pass
+    # Training loop 
+
+    for epoch in range(epochs):
+        loss = None
+        start_time = time.time()
+        for image, labels in get_batches_fn(batch_size):
+            _, loss = sess.run([train_op, cross_entropy_loss], 
+                               feed_dict={input_image: image,
+                                          correct_label: labels,
+                                          keep_prob: KEEP_PROB,
+                                          learning_rate: LR})
+        print()
+print("Train_nn test:")
 tests.test_train_nn(train_nn)
 
 
