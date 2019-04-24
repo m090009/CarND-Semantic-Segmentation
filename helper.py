@@ -18,7 +18,8 @@ import tensorflow as tf
 from glob import glob
 from urllib.request import urlretrieve
 from tqdm import tqdm
-
+import matplotlib.pyplot as plt
+plt.switch_backend('agg')
 
 class DLProgress(tqdm):
 	"""
@@ -174,3 +175,17 @@ def save_inference_samples(runs_dir, data_dir, sess, image_shape, logits, keep_p
 		sess, logits, keep_prob, input_image, os.path.join(data_dir, 'data_road/testing'), image_shape)
 	for name, image in image_outputs:
 		scipy.misc.imsave(os.path.join(output_dir, name), image)
+
+def plot_loss(runs_dir, loss, folder_name):
+	_, axes = plt.subplots()
+	plt.plot(range(0, len(loss)), loss)
+	plt.title('Cross-entropy loss')
+	plt.xlabel('Epoch')
+	plt.ylabel('Loss')
+	plt.grid()
+	if os.path.exists(runs_dir):
+		shutil.rmtree(runs_dir)
+	os.makedirs(runs_dir)
+
+	output_file = os.path.join(runs_dir, folder_name + ".png")
+	plt.savefig(output_file)

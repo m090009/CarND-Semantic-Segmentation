@@ -6,6 +6,7 @@ import warnings
 from distutils.version import LooseVersion
 import project_tests as tests
 import time
+from datetime import timedelta
 
 
 
@@ -82,7 +83,11 @@ def layers(vgg_layer3_out, vgg_layer4_out, vgg_layer7_out, num_classes):
                                               kernel_initializer= tf.random_normal_initializer(stddev=STDDEV),
                                               kernel_regularizer= tf.contrib.layers.l2_regularizer(L2_REG))
     
-    layer4_1x1 = tf.layers.conv2d(vgg_layer4_out,
+    # Scale the layer 4 and layer 3 pooling layers
+    scaled_layer3 = tf.multiply(vgg_layer3_out, 0.0001, name='pool3_out_scaled')
+    scaled_layer4 = tf.multiply(vgg_layer4_out, 0.01, name='pool4_out_scaled')
+
+    layer4_1x1 = tf.layers.conv2d(scaled_layer4,
                                        num_classes, 1, strides=1,
                                        padding= "same",
                                        kernel_initializer= tf.random_normal_initializer(stddev=STDDEV),
@@ -99,7 +104,7 @@ def layers(vgg_layer3_out, vgg_layer4_out, vgg_layer7_out, num_classes):
                                               kernel_initializer= tf.random_normal_initializer(stddev=STDDEV),
                                               kernel_regularizer= tf.contrib.layers.l2_regularizer(L2_REG))
 
-    layer3_1x1 = tf.layers.conv2d(vgg_layer3_out,
+    layer3_1x1 = tf.layers.conv2d(scaled_layer3,
                                     num_classes, 1, strides=1,
                                     padding= "same",
                                     kernel_initializer= tf.random_normal_initializer(stddev=STDDEV),
@@ -132,11 +137,18 @@ def optimize(nn_last_layer, correct_label, learning_rate, num_classes):
     
     logits = tf.reshape(nn_last_layer, (-1, num_classes))
     labels = tf.reshape(correct_label, (-1, num_classes))
+
     cross_entropy_loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(logits=logits, labels=labels))
 
     optimizer = tf.train.AdamOptimizer(learning_rate=learning_rate)
 
-    train_op = optimizer.minimize(cross_entropy_loss)
+    # Use the L2 loss that was added to the decoder layers in the loss calculation 
+    reg_losses = tf.get_collection(tf.GraphKeys.REGULARIZATION_LOSSES)
+    # Some constant weight for the regularization loss
+    l2_const = 0.003 # 0.002, 0.005, 0.05, 1
+    loss = cross_entropy_loss + l2_const * sum(reg_losses)
+
+    train_op = optimizer.minimize(loss)
 
     return logits, train_op, cross_entropy_loss
 print("Optimize test:")
@@ -160,7 +172,9 @@ def train_nn(sess, epochs, batch_size, get_batches_fn, train_op, cross_entropy_l
     """
     # TODO: Implement function
     # Training loop 
-
+    losses = []
+    print("***************************************************************************")
+    print("Start Training for {} epochs with {} batch size ".format(epochs, batch_size))
     for epoch in range(epochs):
         loss = None
         start_time = time.time()
@@ -170,7 +184,11 @@ def train_nn(sess, epochs, batch_size, get_batches_fn, train_op, cross_entropy_l
                                           correct_label: labels,
                                           keep_prob: KEEP_PROB,
                                           learning_rate: LR})
-        print()
+            losses.append(loss)
+        print("Epoch: {} of {}, Loss: {} in {} Time".format(epoch + 1, epochs, round(loss, 4), str(timedelta(seconds=time.time() - start_time))))
+    helper.plot_loss('./runs', losses, "Training Loss")
+    print("========Training has ended========")
+    print("***************************************************************************")
 print("Train_nn test:")
 tests.test_train_nn(train_nn)
 
@@ -188,6 +206,13 @@ def run():
     # OPTIONAL: Train and Inference on the cityscapes dataset instead of the Kitti dataset.
     # You'll need a GPU with at least 10 teraFLOPS to train on.
     #  https://www.cityscapes-dataset.com/
+    
+
+    # Hyperparameters
+    # After trying multiple Epohs 200 seems to give ok results 
+    EPOCHS = 200
+    BATCH_SIZE = 32
+
 
     with tf.Session() as sess:
         # Path to vgg model
@@ -198,13 +223,28 @@ def run():
         # OPTIONAL: Augment Images for better results
         #  https://datascience.stackexchange.com/questions/5224/how-to-prepare-augment-images-for-neural-network
 
-        # TODO: Build NN using load_vgg, layers, and optimize function
 
+
+        # Initialize Placeholders
+        correct_label = tf.placeholder(tf.float32, [None, None, None, num_classes])
+        learning_rate = tf.placeholder(tf.float32)
+
+        # TODO: Build NN using load_vgg, layers, and optimize function
+        input_image, keep_prob, vgg_layer3, vgg_layer4, vgg_layer7 = load_vgg(sess, vgg_path)
+        nn_last_layer = layers(vgg_layer3, vgg_layer4, vgg_layer7, num_classes)
+
+        logits, train_op, cross_entropy_loss = optimize(nn_last_layer, correct_label, learning_rate, num_classes)
         # TODO: Train NN using the train_nn function
 
+        # Initializing the variables
+        init = tf.global_variables_initializer()
+        sess.run(init)
+        s_time = time.time()
+        train_nn(sess, EPOCHS, BATCH_SIZE, get_batches_fn, train_op, cross_entropy_loss, input_image, correct_label, keep_prob, learning_rate)
+        print("Time taken : {}".format(str(timedelta(seconds=(time.time() - s_time)))))
         # TODO: Save inference data using helper.save_inference_samples
         #  helper.save_inference_samples(runs_dir, data_dir, sess, image_shape, logits, keep_prob, input_image)
-
+        helper.save_inference_samples(runs_dir, data_dir, sess, image_shape, logits, keep_prob, input_image)
         # OPTIONAL: Apply the trained model to a video
 
 
